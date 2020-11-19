@@ -1,7 +1,6 @@
 #### libraries ####
 library(shiny)
 library(nntcalc)
-library(knitr)
 library(png)
 
 ####user interface####
@@ -142,9 +141,13 @@ ui <- fluidPage( titlePanel(title=div(img(height = "100%",
                     checkboxInput( inputId = "decrease2", 
                                    label   = "Success - decrease", 
                                    TRUE ),
+
+                downloadButton("download", "Download results in csv format"),
                 
                 tableOutput('contents'),
-
+                
+                h2(""), 
+                
                 submitButton("Run"), 
                 
                 h5("Designed and developed by Valentin Vancak", align = "center"),
@@ -202,7 +205,7 @@ server <- function( input, output, session ) {
        })
    
    
-  output$contents <- renderTable( { withProgress(message = 'Calculating the required NNT... Please wait',
+  out_data <- reactive( { withProgress(message = 'Calculating the required NNT... Please wait',
                                                  value = 0.8,
                                                  {   
     
@@ -215,8 +218,8 @@ server <- function( input, output, session ) {
                      cutoff    = input$mcid1,
                      decrease  = input$decrease1,
                      dist      = "none"), row.names = "" ) ) 
-                     
-    }
+      
+      }
     
     
     if( input$nnt_type == "Unadjusted Laupacis NNT" &
@@ -321,11 +324,25 @@ server <- function( input, output, session ) {
       return( data.frame(Note = "Please make sure all fields are filled in correctly", 
                          row.names = ""  ) )
     
-     } )}, include.rownames = TRUE )
-  
+     } )} )
+ # , include.rownames = TRUE
+  output$contents <- renderTable(out_data(), rownames = TRUE)
+
+  ### DOWNLOAD DATA ###
+  output$download <-
+    downloadHandler(
+      filename = function () {
+        paste("NNT_results.csv", sep = "")
+      },
+      content = function(file) {
+        write.csv(out_data(), file)
+      }
+    )
+
   
 }
 
 
 # Run the application
 shinyApp(ui = ui, server = server)
+
