@@ -1,5 +1,6 @@
 #### libraries ####
 library(shiny)
+
 library(nntcalc)
 library(png)
 
@@ -12,6 +13,11 @@ ui <- fluidPage( titlePanel(title=div(img(height = "100%",
                   h3(strong( "An online calculator of the unadjusted, adjusted,
                      and the marginal NNT with the corresponding 95% confidence intervals"),
                      align = "center"),
+                 h4( "For user guidlines and step-by-step tutorial please refer to the following paper",
+                    align = "center"),
+                 h4( tags$a("Guidelines to understand and compute the number needed to treat",
+                             href = "http://dx.doi.org/10.1136/ebmental-2020-300232", ),
+                    align = "center"),
 
      #            uiOutput("tab1"),
 fluidRow(
@@ -30,10 +36,10 @@ fluidRow(
                  column(6,
 
                  selectInput(inputId = "dataset",
-                             label = "Select a sample dataset",
+                             label = "Select a sample dataset (please type a name with the filename extension when saving)",
                              choices = c("unadjusted NNT",
                                          "adjusted NNT for ANOVA model",
-                                         "adjusted NNT for linear   regression",
+                                         "adjusted NNT for linear regression",
                                          "adjusted NNT for logistic regression",
                                          "adjusted NNT for Cox regression"
                              )),
@@ -46,10 +52,10 @@ fluidRow(
                  column(6,
 
                   fileInput("file1",
-                            "Please choose a csv file",
+                            "Choose a csv file (please reload the page before uploading each file)",
                             multiple = FALSE,
                             accept   = c("text/csv",
-                                       "text/comma-separated-values,text/plain",
+                                       "text/comma-separated-values, text/plain",
                                        ".csv")),
 
                  checkboxInput("header", "Header", TRUE))),
@@ -174,34 +180,44 @@ fluidRow(
                                    label   = "Success - decrease",
                                    TRUE ),
 
+                actionButton("run_button","Run"),
+
                 downloadButton("download", "Download results in csv format"),
 
                 tableOutput('contents'),
                 
                 h2(""),
 
-                submitButton("Run"),
+                # submitButton("Run"),
 
                 h5("Designed and developed by Valentin Vancak", align = "center"),
                 h5(tags$a(href = "https://github.com/vancak/NNTcalculator",
                           "This application is based on the nntcalc R package"),
                    align = "center"),
+
+
                 )
 
 ##### SERVER #####
 
 server <- function( input, output, session ) {
-
   #Reactive to store loaded data
   reactives <- reactiveValues(
-
+    
     dat = NULL
-
+    
   )
-
-   observeEvent(input$file1, {
-
-         reactives$dat =     read.csv(file    = input$file1$datapath)
+  # 
+  #   ext <- tools::file_ext(input$file$name)
+  # if(ext!="csv"){
+  #   showNotification("wassup")
+  # }
+  
+   observeEvent(input$file1,{
+    
+     reactives$dat =     read.csv(file    = input$file1$datapath)
+     
+    
 
          updateSelectInput(session,
                            inputId  = 'treat',
@@ -240,7 +256,8 @@ server <- function( input, output, session ) {
   out_data <- reactive( { withProgress(message = 'Calculating the required NNT... Please wait',
                                                  value = 0.8,
                                                  {
-
+                                                   
+req(input$run_button)
     if( input$nnt_type == "Unadjusted Laupacis NNT" &
         input$nnt_est  == "Nonparametric MLE" )
     {
@@ -357,8 +374,20 @@ server <- function( input, output, session ) {
                          row.names = ""  ) )
 
      } )} )
+
  # , include.rownames = TRUE
-  output$contents <- renderTable(out_data(), rownames = TRUE)
+  output$contents <- renderTable({
+    validate({
+      req(input$file1)
+      if(tools::file_ext(input$file1$name)=="csv")
+        NULL
+      else("Please upload a csv file")}
+    )
+    
+    
+   
+      out_data()}
+    , rownames = TRUE)
 
   ### DOWNLOAD DATA ###
   output$download <-
@@ -374,27 +403,21 @@ server <- function( input, output, session ) {
 
 
   ### DOWNLOAD SAMPLE DATA ###
-
   sampleData <- reactive({ 
-    if(input$dataset == "unadjusted NNT") {
-     return( read.csv(".//data//panss_unadjusted.csv") ) }
-   #     #  switch(input$dataset,
-   #      #        "unadjusted NNT"                       = read.csv(".//data//panss_unadjusted.csv"),
-   #      #        "adjusted NNT for ANOVA model"         = read.csv(".//data//anova_data.csv"),
-   #      #        "adjusted NNT for linear regression"   = read.csv(".//data/panss_regression.csv"),
-   #      #        "adjusted NNT for logistic regression" = read.csv(".//data//panss_logistic.csv"),
-   #      #        "adjusted NNT for Cox regression"      = read.csv(".//data//panss_survival.csv")
-        # )
-   else
-    if(input$dataset == "adjusted NNT for ANOVA model") {
-      return( read.csv(".//data//anova_data.csv") ) }
-            })
-  
-   observe( print( input$dataset ) )
-   
-  output$sample <- renderTable( sampleData() )
-  
-   observe( print( head(sampleData())) ) 
+    # if(input$dataset == "unadjusted NNT") {
+    #     return( read.csv(".//data//panss_unadjusted.csv") ) }
+    switch(input$dataset,
+           "unadjusted NNT"                       = read.csv(".//data//panss_unadjusted.csv"),
+           "adjusted NNT for ANOVA model"         = read.csv(".//data//anova_data.csv"),
+           "adjusted NNT for linear regression"   = read.csv(".//data//panss_regression.csv"),
+           "adjusted NNT for logistic regression" = read.csv(".//data//panss_logistic.csv"),
+           "adjusted NNT for Cox regression"      = read.csv(".//data//panss_survival.csv")
+    )
+    #     else
+    #         if(input$dataset == "adjusted NNT for ANOVA model") {
+    #             return( read.csv(".//data//anova_data.csv") ) }
+    # 
+  })
   
   output$downloadData <- downloadHandler( 
     filename = function(){
@@ -405,33 +428,16 @@ server <- function( input, output, session ) {
       write.csv(sampleData(), file, row.names = FALSE)
     })
   
-  #####
-  
-  url2 <- a("Dataset for unadjusted NNT", href="https://raw.githubusercontent.com/vancak/nntcalc/main/data/panss_unadjusted.csv")
-  output$tab2 <- renderUI({
-    tagList("Click -> Save as...", url2)
-  })
-
-  url21 <- a("Dataset for adjusted NNT in one-way-ANOVA", href="https://raw.githubusercontent.com/vancak/nntcalc/main/data/anova_data.csv")
-  output$tab21 <- renderUI({
-    tagList("", url21)
-  })
-  
-  url32 <- a("Dataset for adjusted NNT in regression analysis", href="https://raw.githubusercontent.com/vancak/nntcalc/main/data/panss_logistic.csv")
-  output$tab32 <- renderUI({
-    tagList("", url32)
-  })
-
-  url3 <- a("Dataset for adjusted NNT in logistic regression", href="https://raw.githubusercontent.com/vancak/nntcalc/main/data/panss_regression.csv")
-  output$tab3 <- renderUI({
-    tagList("", url3)
-  })
-
+  output$download <- downloadHandler( 
+    filename = function(){
+      paste("results.csv", sep = "")
+    },
     
-  url4 <- a("Dataset for adjusted NNT in survival analysis", href="https://raw.githubusercontent.com/vancak/nntcalc/main/data/panss_survival.csv")
-  output$tab4 <- renderUI({
-    tagList("", url4)
-  })
+    content = function(file) {
+      write.csv(out_data(), file, row.names = FALSE)
+    })
+
+
 }
 
 # Run the application
